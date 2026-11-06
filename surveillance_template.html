@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Health District 3 Disease Surveillance</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<style>
+  :root {
+    --navy:   #1a3a5c;
+    --blue:   #2a5298;
+    --line:   #e0e4ea;
+    --page:   #eef1f5;
+    --alarm:  #CD0000;
+    --series: #36648B;
+    --thresh: #c98a93;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: #000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+
+  header {
+    background: linear-gradient(135deg, var(--navy), var(--blue));
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 19px; font-weight: 600; color: #fff; }
+  header p  { margin: 2px 0 0; font-size: 12.5px; color: #fff; }
+  .head-right { margin-left: auto; text-align: right; font-size: 12px; color: #fff; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 18px 24px 40px; }
+  @media (max-width: 820px) { main { padding: 14px 12px 28px; } }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  h2.sec {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #000;
+  }
+  .sec-sub { margin: 0 0 14px; font-size: 12.5px; line-height: 1.6; color: #000; }
+
+  /* Signals */
+  .signal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+  .signal {
+    text-align: left;
+    font: inherit;
+    background: #FFF7F7;
+    border: 1px solid #f0cdcd;
+    border-left: 4px solid var(--alarm);
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+  }
+  .signal:hover { background: #fdeeee; }
+  .signal:focus-visible { outline: 2px solid var(--alarm); outline-offset: 2px; }
+  .signal b { display: block; font-size: 14px; margin-bottom: 3px; }
+  .signal span { display: block; font-size: 12.5px; line-height: 1.5; }
+  .no-signal {
+    background: #F4F8F2;
+    border: 1px solid #d5e3cc;
+    border-left: 4px solid #3B6D11;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13.5px;
+  }
+  .caveat {
+    background: #f7f7f7;
+    border-left: 4px solid #888;
+    padding: 10px 14px;
+    margin-top: 14px;
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+
+  /* Controls */
+  .controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .field { flex: 1 1 280px; min-width: 0; }
+  label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; }
+  select, input[type=search] {
+    width: 100%;
+    font: inherit;
+    font-size: 14px;
+    padding: 8px 10px;
+    color: #000;
+    background: #fff;
+    border: 1px solid #ccd2da;
+    border-radius: 8px;
+  }
+  select:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+  .range-strip { display: flex; gap: 4px; flex-wrap: wrap; }
+  .range-btn {
+    font: inherit;
+    font-size: 12.5px;
+    padding: 7px 12px;
+    border: 1px solid #ccd2da;
+    border-radius: 8px;
+    background: #fff;
+    color: #000;
+    cursor: pointer;
+  }
+  .range-btn:hover { background: #f2f4f7; }
+  .range-btn[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; }
+
+  /* Chart */
+  #chart { height: 380px; }
+  .chart-legend {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    margin: 4px 0 2px;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .chart-legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .key-dot  { width: 13px; height: 13px; border-radius: 50%; display: inline-block; }
+  .key-line { width: 20px; height: 0; border-top: 3px solid var(--series); display: inline-block; }
+  .key-dash { width: 20px; height: 0; border-top: 3px dashed var(--thresh); display: inline-block; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat { background: #f7f9fb; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .stat .k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat .v { font-size: 19px; font-weight: 700; margin-top: 3px; }
+  .stat .n { font-size: 11.5px; margin-top: 2px; line-height: 1.4; }
+  @media (max-width: 820px) { .stat-row { grid-template-columns: 1fr 1fr; } }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 2px solid var(--line);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  th:hover { background: #f4f6f9; }
+  td { padding: 8px; border-bottom: 1px solid #f1f3f6; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #f4f8fd; }
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #eef1f5;
+  }
+  .pill.alarm { background: #FCEBEB; color: var(--alarm); }
+  .table-wrap { overflow-x: auto; }
+
+  details { border-top: 1px solid var(--line); margin-top: 6px; }
+  summary {
+    cursor: pointer;
+    padding: 12px 2px;
+    font-size: 13px;
+    font-weight: 700;
+    list-style: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "+ "; font-weight: 700; }
+  details[open] summary::before { content: "\2212 "; }
+  .method-body { font-size: 13px; line-height: 1.7; padding: 0 2px 14px; }
+  .method-body ul { padding-left: 20px; margin: 6px 0 12px; }
+  .method-body li { margin-bottom: 8px; }
+  .method-body h3 { font-size: 13px; margin: 14px 0 4px; }
+  footer { font-size: 11.5px; line-height: 1.6; padding: 0 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Health District 3 Disease Surveillance</h1>
+    <p>Weekly case counts screened for unusual activity</p>
+  </div>
+  <div class="head-right">
+    <div id="dataThrough"></div>
+    <div id="generatedAt"></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- RECENT SIGNALS -->
+  <section class="card">
+    <h2 class="sec">Signals in the last 2 weeks</h2>
+    <p class="sec-sub">Conditions where a recent week came in higher than the model expected.
+    Select one to see its history.</p>
+    <div id="signalBox"></div>
+    <div class="caveat">
+      <b>What a signal means:</b> the number of cases reported that week is statistically higher
+      than the baseline the model expects for that condition. It is worth a closer look, not a
+      conclusion.<br><br>
+      <b>What it does not mean:</b> it does not mean there is a confirmed outbreak, that cases are
+      linked, or that the data are wrong. A signal can reflect a small absolute change in a
+      low-count condition, a reporting delay or catch-up, or ordinary random variation. Signals
+      should prompt review of case details, shared exposures, and data quality.
+    </div>
+  </section>
+
+  <!-- CONDITION DETAIL -->
+  <section class="card">
+    <h2 class="sec">Condition detail</h2>
+    <div class="controls" style="margin-bottom:14px;">
+      <div class="field">
+        <label for="condition">Condition</label>
+        <select id="condition"></select>
+      </div>
+      <div>
+        <label for="rangeStrip">Show</label>
+        <div class="range-strip" id="rangeStrip">
+          <button type="button" class="range-btn" data-range="1">1 year</button>
+          <button type="button" class="range-btn" data-range="2" aria-pressed="true">2 years</button>
+          <button type="button" class="range-btn" data-range="5">5 years</button>
+          <button type="button" class="range-btn" data-range="0">All</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-row" id="statRow"></div>
+
+    <div id="chart"></div>
+    <div class="chart-legend" id="chartLegend"></div>
+    <p class="sec-sub" id="chartNote" style="margin-top:12px;"></p>
+  </section>
+
+  <!-- ALL CONDITIONS -->
+  <section class="card">
+    <h2 class="sec">All conditions</h2>
+    <p class="sec-sub">Every condition being watched, the method used for it, and how often it has
+    been flagged. Select a row to see its chart.</p>
+    <div class="field" style="max-width:340px; margin-bottom:12px;">
+      <label for="search">Search conditions</label>
+      <input type="search" id="search" placeholder="Type to filter...">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="id">Condition</th>
+            <th data-sort="method">Method</th>
+            <th data-sort="cases">Cases</th>
+            <th data-sort="alarms">Weeks flagged</th>
+            <th data-sort="lastAlarm">Last flagged</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="card">
+    <h2 class="sec">How the detection works</h2>
+    <details>
+      <summary>Two ways to flag an unusual week</summary>
+      <div class="method-body">
+        <p>Each condition's weekly case counts are screened for weeks that look statistically higher
+        than expected. What counts as expected depends on whether a condition has a seasonal
+        pattern, so one of two methods is chosen automatically for each condition.</p>
+        <ul>
+          <li><b>Farrington Flexible</b>, for conditions with a real seasonal pattern such as RSV
+          peaking in winter. It builds its baseline from the <b>same calendar week</b> in each of
+          the past several years, so it knows what normal looks like for that time of year.</li>
+          <li><b>GLR-NB</b> (negative-binomial generalized likelihood ratio), for conditions that
+          stay roughly flat year-round or have very low, sparse counts. It fits one flat baseline
+          rate from several years of history, then flags weeks that statistically exceed it.</li>
+        </ul>
+        <p>Farrington needs enough history at each specific calendar week to fit a stable model, and
+        for flat or sparse conditions there often isn't enough. GLR-NB avoids that by not requiring
+        week-matched history, but it can't represent a seasonal curve, so it isn't a good substitute
+        for genuinely seasonal diseases. The choice is made by comparing a flat baseline with a
+        seasonal one for each condition's history and using whichever fits significantly better.</p>
+        <p>Conditions marked <b>Insufficient data</b> have too few cases or years to model
+        reliably. Their counts are shown, but no weeks are flagged.</p>
+      </div>
+    </details>
+    <details>
+      <summary>Settings used for these results</summary>
+      <div class="method-body" id="paramBody"></div>
+    </details>
+  </section>
+
+  <footer id="footer"></footer>
+</main>
+
+<script>
+const P = /*__DATA__*/;
+
+/* ---------- Helpers ---------- */
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function parseDay(s) {
+  const [y, m, d] = s.split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+function dayStr(ms) {
+  const t = new Date(ms), p = n => String(n).padStart(2, "0");
+  return t.getUTCFullYear() + "-" + p(t.getUTCMonth() + 1) + "-" + p(t.getUTCDate());
+}
+function fmtDay(s) {
+  const t = new Date(parseDay(s));
+  return MONTHS[t.getUTCMonth()] + " " + String(t.getUTCDate()).padStart(2, "0") +
+         ", " + t.getUTCFullYear();
+}
+function fmtN(x, dp) {
+  if (x === null || x === undefined || !isFinite(x)) return "\u2014";
+  return x.toLocaleString("en-US", { minimumFractionDigits: dp || 0,
+                                     maximumFractionDigits: dp || 0 });
+}
+const IR_LABEL = "per " + P.irMult.toLocaleString("en-US");
+
+/* Weeks for a condition: either stored explicitly, or every 7 days from the start */
+function weeksOf(s) {
+  if (s.weeks) return s.weeks;
+  const start = parseDay(s.start);
+  return s.cases.map((_, i) => dayStr(start + i * 7 * 864e5));
+}
+
+const BY_ID = {};
+P.conditions.forEach(c => { BY_ID[c.id] = c; });
+
+/* ---------- State ---------- */
+const params = new URLSearchParams(window.location.search);
+let current = null;
+let years = 2;
+let sortKey = "id", sortDir = 1;
+
+/* ---------- Header ---------- */
+document.getElementById("dataThrough").textContent =
+  "Data through week of " + fmtDay(P.dataThrough);
+document.getElementById("generatedAt").textContent = "Updated " + P.generatedAt;
+
+document.getElementById("paramBody").innerHTML =
+  "<p>These results were produced with the settings below. They apply to whichever method " +
+  "was chosen for each condition.</p><ul>" +
+  "<li><b>alpha " + P.params.alpha + "</b> (Farrington Flexible): how high the alert threshold " +
+  "sits. A higher alpha lowers the threshold and produces more alarms.</li>" +
+  "<li><b>b " + P.params.b + " years</b>: how much past data builds the baseline. More years " +
+  "means a smoother baseline and fewer alarms.</li>" +
+  "<li><b>w " + P.params.w + " weeks</b> (Farrington Flexible): how many weeks either side of " +
+  "the matching calendar week are pooled into the baseline.</li>" +
+  "<li><b>c.ARL " + P.params.c_ARL + "</b> (GLR-NB): how far above baseline a week must be " +
+  "before it is flagged. A lower value produces more alarms.</li>" +
+  "<li><b>Episode window " + P.params.dedup + " days</b>: repeat reports for the same person and " +
+  "condition within this window count once.</li></ul>" +
+  "<p>Incidence rates are " + IR_LABEL + " population. Cases are limited to " +
+  P.params.jurisdiction + ".</p>";
+
+document.getElementById("footer").innerHTML =
+  "An alarm means a week's count is statistically higher than expected for that condition. " +
+  "It signals a need for epidemiological review, case-linkage assessment, and possible " +
+  "investigation. It is not proof of an outbreak. Data through the week of " +
+  fmtDay(P.dataThrough) + "; counts for recent weeks may rise as reports arrive.";
+
+/* ---------- Recent signals ---------- */
+const signalBox = document.getElementById("signalBox");
+if (P.signals.length) {
+  // A condition can alarm in both of the last 2 weeks; show it once, with
+  // each flagged week listed underneath.
+  const grouped = new Map();
+  P.signals.forEach(s => {
+    if (!grouped.has(s.id)) grouped.set(s.id, { id: s.id, method: s.method, weeks: [] });
+    grouped.get(s.id).weeks.push(s);
+  });
+
+  const grid = document.createElement("div");
+  grid.className = "signal-grid";
+  grouped.forEach(g => {
+    g.weeks.sort((a, b) => parseDay(b.week) - parseDay(a.week));
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "signal";
+    b.innerHTML = "<b>" + g.id + "</b>" +
+      g.weeks.map(s => "<span>" + s.cases + " case" + (s.cases === 1 ? "" : "s") +
+                       ", week of " + fmtDay(s.week) + "</span>").join("") +
+      "<span>" + g.method + "</span>";
+    b.addEventListener("click", () => {
+      select(g.id);
+      document.getElementById("chart").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    grid.appendChild(b);
+  });
+  signalBox.appendChild(grid);
+} else {
+  signalBox.innerHTML = '<div class="no-signal">No condition was flagged in the last 2 weeks.</div>';
+}
+
+/* ---------- Condition list ---------- */
+const condSel = document.getElementById("condition");
+const flaggedIds = new Set(P.signals.map(s => s.id));
+
+function addGroup(label, items) {
+  if (!items.length) return;
+  const g = document.createElement("optgroup");
+  g.label = label;
+  items.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c.id;
+    o.textContent = c.id + (flaggedIds.has(c.id) ? "  \u25CF" : "");
+    g.appendChild(o);
+  });
+  condSel.appendChild(g);
+}
+
+const sorted = P.conditions.slice().sort((a, b) => a.id.localeCompare(b.id));
+addGroup("Flagged in the last 2 weeks", sorted.filter(c => flaggedIds.has(c.id)));
+addGroup("Farrington Flexible", sorted.filter(c => !flaggedIds.has(c.id) && c.method === "Farrington Flexible"));
+addGroup("GLR-NB", sorted.filter(c => !flaggedIds.has(c.id) && c.method === "GLR-NB"));
+addGroup("Insufficient data", sorted.filter(c => !flaggedIds.has(c.id) && c.method === "Insufficient data"));
+
+condSel.addEventListener("change", () => select(condSel.value));
+
+/* ---------- Chart ---------- */
+function renderChart() {
+  const s = P.series[current];
+  const w = weeksOf(s);
+  const lastMs = parseDay(w[w.length - 1]);
+  const cutoff = years === 0 ? -Infinity : lastMs - years * 365 * 864e5;
+
+  const x = [], ir = [], up = [], base = [], hov = [];
+  const hasUpper = s.upper.some(v => v !== null && isFinite(v));
+  const hasBase  = s.base && s.base.some(v => v !== null && isFinite(v));
+  const ax = [], ay = [], ah = [];
+  let trainEnd = null;
+
+  w.forEach((d, i) => {
+    const ms = parseDay(d);
+    if (s.train[i] === 1) trainEnd = d;
+    if (ms < cutoff) return;
+    x.push(d);
+    ir.push(s.ir[i]);
+    up.push(s.upper[i]);
+    base.push(hasBase ? s.base[i] : null);
+    hov.push("Week of " + fmtDay(d) + "<br>" + s.cases[i] + " case" +
+             (s.cases[i] === 1 ? "" : "s") + "<br>Rate " + fmtN(s.ir[i], 2) +
+             (hasUpper && s.upper[i] !== null ? "<br>Threshold " + fmtN(s.upper[i], 2) : "") +
+             (hasBase && s.base[i] !== null ? "<br>Expected baseline " + fmtN(s.base[i], 2) : ""));
+    if (s.alarm[i] === 1) {
+      ax.push(d); ay.push(s.ir[i]);
+      ah.push("<b>Flagged</b><br>Week of " + fmtDay(d) + "<br>" + s.cases[i] +
+              " case" + (s.cases[i] === 1 ? "" : "s") + "<br>Rate " + fmtN(s.ir[i], 2) +
+              (hasUpper && s.upper[i] !== null
+                 ? "<br>Threshold " + fmtN(s.upper[i], 2)
+                 : (hasBase && s.base[i] !== null
+                      ? "<br>Expected baseline " + fmtN(s.base[i], 2) : "")));
+    }
+  });
+
+  const traces = [
+    { x: x, y: hasUpper ? up : base, type: "scatter", mode: "lines",
+      name: hasUpper ? "Threshold" : "Expected baseline",
+      line: { color: "#c98a93", width: 2, dash: "dash" },
+      connectgaps: false, hoverinfo: "skip", showlegend: false },
+    { x: x, y: ir, type: "scatter", mode: "lines+markers", name: "Rate",
+      line: { color: "#36648B", width: 1.8 },
+      marker: { color: "#36648B", size: 5 },
+      hovertext: hov, hovertemplate: "%{hovertext}<extra></extra>", showlegend: false },
+    { x: ax, y: ay, type: "scatter", mode: "markers", name: "Flagged",
+      marker: { color: "#CD0000", size: 11 },
+      hovertext: ah, hovertemplate: "%{hovertext}<extra></extra>", showlegend: false }
+  ];
+
+  const shapes = [];
+  // Shade the baseline period, which the model learns from but never flags
+  if (trainEnd && (years === 0 || parseDay(trainEnd) > cutoff)) {
+    shapes.push({
+      type: "rect", xref: "x", yref: "paper", layer: "below",
+      x0: x[0], x1: trainEnd, y0: 0, y1: 1,
+      fillcolor: "rgba(227,231,236,0.75)", line: { width: 0 }
+    });
+  }
+
+  // A threshold far above every observed rate would squash the rate line flat,
+  // so cap the axis and say so under the chart.
+  const irMax = Math.max(...ir.filter(v => v !== null && isFinite(v)), 0);
+  const upMax = Math.max(...(hasUpper ? up : base).filter(v => v !== null && isFinite(v)), 0);
+  const capped = irMax > 0 && upMax > 3 * irMax;
+  const yRange = capped ? [0, irMax * 1.3] : undefined;
+
+  document.getElementById("chartLegend").innerHTML =
+    '<span><i class="key-line"></i>Weekly incidence rate</span>' +
+    (hasUpper
+      ? '<span><i class="key-dash"></i>Alarm threshold</span>'
+      : (hasBase ? '<span><i class="key-dash"></i>Expected baseline</span>' : "")) +
+    '<span><i class="key-dot" style="background:#CD0000"></i>Week flagged</span>' +
+    '<span><i class="key-dot" style="background:#e3e7ec"></i>Baseline period (not screened)</span>';
+
+  if (capped) {
+    document.getElementById("chartNote").textContent +=
+      " The threshold runs above the top of the chart in some weeks.";
+  }
+
+  Plotly.react("chart", traces, {
+    margin: { l: 58, r: 16, t: 10, b: 50 },
+    paper_bgcolor: "#fff",
+    plot_bgcolor: "#fff",
+    font: { family: "-apple-system, 'Segoe UI', Roboto, Arial, sans-serif", size: 12, color: "#000" },
+    hovermode: "closest",
+    hoverlabel: { bgcolor: "#fff", bordercolor: "#36648B", font: { color: "#000", size: 12 } },
+    xaxis: { type: "date", showgrid: false, tickfont: { color: "#000" }, fixedrange: true },
+    yaxis: {
+      title: { text: "Weekly rate " + IR_LABEL, font: { size: 12, color: "#000" } },
+      rangemode: "tozero", gridcolor: "#EDEEF1", zeroline: false,
+      range: yRange, autorange: capped ? false : true,
+      tickfont: { color: "#000" }, fixedrange: true
+    },
+    shapes: shapes
+  }, { displayModeBar: false, responsive: true });
+}
+
+/* ---------- Stats above the chart ---------- */
+function renderStats() {
+  const c = BY_ID[current];
+  const s = P.series[current];
+  const w = weeksOf(s);
+  const last = w.length - 1;
+
+  const status = (s.alarm[last] === 1)
+    ? '<span class="pill alarm">FLAGGED</span>'
+    : (s.alarm[last] === null || s.alarm[last] === undefined
+         ? "Not screened"
+         : (c.method === "GLR-NB" ? "No alarm this week" : "Within expected range"));
+
+  document.getElementById("statRow").innerHTML =
+    stat("Most recent week", c.lastCases + (c.lastCases === 1 ? " case" : " cases"),
+         "Week of " + fmtDay(w[last])) +
+    stat("Rate that week", fmtN(c.lastIR, 2),
+         c.lastUpper !== null ? "Threshold " + fmtN(c.lastUpper, 2)
+           : (c.lastBase !== null && c.lastBase !== undefined
+                ? "Expected baseline " + fmtN(c.lastBase, 2)
+                : "No comparison value for this condition")) +
+    stat("Status", status, "") +
+    stat("Method", c.method,
+         c.alarms + (c.alarms === 1 ? " week" : " weeks") + " flagged since " +
+         fmtDay(w[0]).split(", ")[1]);
+
+  document.getElementById("chartNote").textContent = c.method === "Insufficient data"
+    ? "There isn't enough history for this condition to model reliably, so counts are shown but no weeks are flagged."
+    : c.method === "GLR-NB"
+      ? "The shaded period at the left is the baseline the model learns from; weeks there are never flagged. "
+        + "GLR-NB builds evidence across several weeks rather than judging each week against a line, so the "
+        + "dashed line is the rate it expects when nothing unusual is happening, not a cut-off. A week can be "
+        + "flagged after a run of moderately high weeks."
+      : "The shaded period at the left is the baseline the model learns from; weeks there are never flagged.";
+}
+function stat(k, v, n) {
+  return '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v +
+         '</div><div class="n">' + n + "</div></div>";
+}
+
+/* ---------- All conditions table ---------- */
+function renderTable() {
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const rows = P.conditions
+    .filter(c => !q || c.id.toLowerCase().includes(q))
+    .sort((a, b) => {
+      let x = a[sortKey], y = b[sortKey];
+      if (x === null) x = sortKey === "lastAlarm" ? "" : -1;
+      if (y === null) y = sortKey === "lastAlarm" ? "" : -1;
+      if (typeof x === "string") return sortDir * x.localeCompare(y);
+      return sortDir * (x - y);
+    });
+
+  document.getElementById("tableBody").innerHTML = rows.map(c =>
+    '<tr data-id="' + c.id.replace(/"/g, "&quot;") + '"><td>' + c.id + "</td><td>" + c.method +
+    "</td><td>" + fmtN(c.cases) + "</td><td>" +
+    (c.alarms ? '<span class="pill alarm">' + c.alarms + "</span>" : "0") + "</td><td>" +
+    (c.lastAlarm ? fmtDay(c.lastAlarm) : "\u2014") + "</td></tr>"
+  ).join("");
+
+  document.querySelectorAll("#tableBody tr").forEach(tr => {
+    tr.addEventListener("click", () => {
+      select(tr.dataset.id);
+      document.getElementById("chart").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  });
+}
+
+document.querySelectorAll("th[data-sort]").forEach(th => {
+  th.addEventListener("click", () => {
+    const k = th.dataset.sort;
+    sortDir = (k === sortKey) ? -sortDir : (k === "id" || k === "method" ? 1 : -1);
+    sortKey = k;
+    renderTable();
+  });
+});
+document.getElementById("search").addEventListener("input", renderTable);
+
+document.querySelectorAll(".range-btn").forEach(b => {
+  b.addEventListener("click", () => {
+    years = Number(b.dataset.range);
+    document.querySelectorAll(".range-btn").forEach(x =>
+      x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    renderChart();
+  });
+});
+
+/* ---------- Select a condition ---------- */
+function select(id) {
+  if (!P.series[id]) return;
+  current = id;
+  condSel.value = id;
+  renderStats();
+  renderChart();
+}
+
+const asked = params.get("condition");
+select(P.series[asked] ? asked
+     : (P.signals.length ? P.signals[0].id : sorted[0].id));
+renderTable();
+</script>
+</body>
+</html>
